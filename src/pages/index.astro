@@ -45,7 +45,11 @@ const imageBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
       </p>
 
       <p>
-        But these models have a costly blind spot: they use roughly the same amount of thinking compute regardless of how difficult the actual problem is! For a basic 7th grade math question, Qwen3-8B wastes <strong>2,500+</strong> tokens of internal thinking, while a multistep olympiad problem gets similar treatment. The model doesn't distinguish between problems it could solve instantly versus ones requiring careful reasoning.
+        But these models have a costly blind spot: they use roughly the same amount of thinking compute regardless of how difficult the actual problem is! 
+      </p>
+
+      <p>
+        For a basic 6th grade math problem, Qwen3-8B wastes <strong>2,500+</strong> tokens of internal thinking, while a multistep olympiad question gets similar treatment. The model doesn't distinguish between problems it could solve instantly versus ones requiring careful reasoning.
       </p>
 
       <!-- Pathology Comparison Image -->
@@ -58,7 +62,7 @@ const imageBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
       </p>
 
       <p>
-        Our brains seem to just know when we need to think carefully versus when we can rely on pattern recognition.
+        Our brains somehow just know when we need to think carefully versus when we can rely on pattern recognition.
         The question then becomes, <strong> can we teach language models this same metacognitive skill? </strong>
       </p>
 
@@ -162,7 +166,7 @@ const imageBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
       </p>
 
       <p>
-        Baseline drifted from 920→982 tokens while accuracy only reached 77.9%. High penalty compressed to 285 tokens but accuracy collapsed to 87.4%.
+        The base model drifted from 920→982 tokens while its accuracy only reached 77.9%. The high penalty compressed most answers to a bare 285 tokens, but accuracy collapsed to 87.4%, suggesting a tradeoff.
       </p>
 
       <!-- Training Curves Image -->
@@ -172,11 +176,7 @@ const imageBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
 
       <h3>Test-Time Improvements</h3>
       <p>
-        The moderate alpha penalty achieved a 59.6% token reduction (982→397) with 16.8 percentage point accuracy improvement over baseline. The full picture: baseline at 982 tokens/77.9%, low at 582 tokens/93.6%, moderate at 397 tokens/94.7%, high at 285 tokens/87.4%.
-      </p>
-
-      <p>
-        The counterintuitive finding: token constraints actually <strong>improved accuracy! </strong> Most likely, the penalties likely act as regularization, forcing focused reasoning instead of verbose rambling.
+        The moderate alpha penalty achieved a 59.6% token reduction (982→397) with 16.8 percentage point accuracy improvement over baseline. The counterintuitive finding: token constraints actually <strong>improved accuracy! </strong> Most likely, the penalties likely act as regularization, forcing focused reasoning instead of verbose rambling.
       </p>
 
       <!-- E2H Behavior by Difficulty Image -->
@@ -190,7 +190,7 @@ const imageBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
       </p>
 
       <p>
-        The moderate penalty learned dramatic adaptation without ever seeing difficulty labels!
+        However, the moderate penalty learned dramatic adaptation without ever seeing difficulty labels!
       </p>
 
       <ul>
