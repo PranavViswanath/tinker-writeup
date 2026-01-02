@@ -8,7 +8,9 @@ const { title, description = "Research blog" } = Astro.props;
 const baseUrl = import.meta.env.BASE_URL;
 const faviconBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
 const siteUrl = import.meta.env.SITE || 'https://PranavViswanath.github.io';
-const imageUrl = `${siteUrl}${baseUrl}tinker-new.png`;
+// Ensure baseUrl has trailing slash for image URL
+const imageBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+const imageUrl = `${siteUrl}${imageBase}tinker-new.png`;
 ---
 
 <!doctype html>
@@ -25,6 +27,9 @@ const imageUrl = `${siteUrl}${baseUrl}tinker-new.png`;
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={imageUrl} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:url" content={`${siteUrl}${baseUrl}`} />
     
     <!-- Twitter Card -->
@@ -32,6 +37,7 @@ const imageUrl = `${siteUrl}${baseUrl}tinker-new.png`;
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={imageUrl} />
+    <meta name="twitter:image:alt" content="Network diagram visualization" />
     
     <!-- Inter Font for body text -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
