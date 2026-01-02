@@ -5,16 +5,19 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <BaseLayout title="Adaptive Reasoning with RLVR: Learning When to Think">
   <article class="max-w-4xl mx-auto px-6 py-12">
     <!-- Title -->
-    <header class="mb-8 text-center">
-      <h1 class="text-2xl font-bold mb-2" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">Adaptive Reasoning with RLVR: Learning When to Think</h1>
-      <div class="text-xl text-text-secondary" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">
+    <header class="mb-8 text-center pt-8">
+      <h1 class="text-4xl font-bold mb-2" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">Adaptive Reasoning with RLVR: Learning When to Think</h1>
+      <div class="text-2xl text-text-secondary" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">
         By <a href="https://pranavviswanath.notion.site/self" class="hover:text-text-primary transition-colors">Pranav Viswanath</a>
+      </div>
+      <div class="text-lg text-text-secondary mt-2" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">
+        Jan 2, 2026
       </div>
     </header>
 
     <!-- Image -->
     <div class="mb-6 flex justify-center">
-      <img src="/tinker%20new.png" alt="Network diagram visualization" class="max-w-2xl w-full h-auto rounded-lg" />
+      <img src="/tinker%20new.png" alt="Network diagram visualization" class="max-w-xl w-full h-auto rounded-lg" />
     </div>
 
     <!-- Epigraph -->
@@ -24,34 +27,68 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     <!-- Blog Content -->
     <div class="prose prose-lg max-w-none mt-6">
-      <p>
-        This is where your blog content will go. You can write in Markdown or use MDX for more advanced features.
-      </p>
-
       <h2>Introduction</h2>
       <p>
-        Your introduction text goes here. This is a single article page with a clean, minimal design using Garamond font and a light cream background.
+        If someone asked you what "2 + 2" equals, you'd probably answer "4" without hesitation. But if they asked you to prove Fermat's last theorem, along with being a little annoyed, you'd probably take a bit longer.
       </p>
 
-      <h2>Main Content</h2>
       <p>
-        Add your main content sections here. The page will fade in smoothly when visitors arrive.
+        LLMs don't work this way.
       </p>
 
-      <h3>Subsection</h3>
       <p>
-        You can organize your content with headings, paragraphs, lists, and more.
+        The newest generation of reasoning models - OpenAI's o3, Anthropic's Opus 4.5, etc - achieve breakthrough performance by "thinking out loud," generating extended chains of reasoning that outperform much larger models on complex benchmarks like AIME and GPQA.
       </p>
 
-      <ul>
-        <li>First point</li>
-        <li>Second point</li>
-        <li>Third point</li>
-      </ul>
-
-      <h2>Conclusion</h2>
       <p>
-        Wrap up your article with a conclusion section.
+        But these models have a costly blind spot: they use roughly the same amount of thinking compute regardless of how difficult the actual problem is! For a basic 7th grade math question, Qwen3-8B wastes <strong>2,500+</strong> tokens of internal thinking, while a multistep olympiad problem gets similar treatment. The model doesn't distinguish between problems it could solve instantly versus ones requiring careful reasoning.
+      </p>
+
+      <!-- Pathology Comparison Image -->
+      <div class="mb-6 flex justify-center">
+        <img src="/pathology_comparison.png" alt="Pathology comparison visualization" class="max-w-2xl w-full h-auto rounded-lg" />
+      </div>
+
+      <p>
+        This matters at scale. In production systems handling millions of queries, uniform allocation means most inference budget gets spent on easy problems that could be solved in a fraction of the tokens. For companies deploying reasoning models, this inefficiency makes models way more expensive than necessary to use. It's also an environmental concern - wasted tokens mean wasted energy, and at the scale these models are being deployed, that adds up.
+      </p>
+
+      <p>
+        Our brains seem to just know when we need to think carefully versus when we can rely on pattern recognition.
+        The question then becomes, <strong> can we teach language models this same metacognitive skill? </strong>
+      </p>
+
+      <p>
+        I got curious about this after hearing <a href="https://youtu.be/ziEll0EuO10?si=ZlBQlvKLGKPEOH7Z" target="_blank" rel="noopener noreferrer">NVIDIA's December podcast with ServiceNow</a>, where they discussed post-training their reasoning model with RL-based token penalties to improve efficiency. Around the same time, Thinking Machines' Tinker platform went GA, making distributed RL training actually accessible to individuals. With the infra suddenly available, I wanted to get hands-on in experimenting with this exciting idea. 
+      </p>
+
+      <p>
+        <strong>Turns out, with a little ingenuity (and a ton of infra help from Tinker), we can go a long way!</strong>
+      </p>
+
+      <h2>RL Primer & Infrastructure</h2>
+      <p>
+        If you're new to reinforcement learning for LLMs, there are tons of useful guides out there - I'd recommend Cameron Wolfe's <a href="https://cameronrwolfe.substack.com/p/ppo-llm" target="_blank" rel="noopener noreferrer">"PPO for LLMs - A Guide for Normal People"</a>. But here's the quick version:
+      </p>
+
+      <p>
+        In RL for language models, the LLM is an agent generating tokens in response to prompts. After completing a response, we assign a reward (1.0 for correct, 0.0 for wrong, minus penalties for excess tokens). The model updates to maximize expected rewards by learning which token choices lead to success.
+      </p>
+
+      <p>
+        The challenge is sparse feedback - if a 50-token reasoning chain fails, which tokens were the problem? GRPO (Group Relative Policy Optimization) handles this by sampling multiple attempts at each problem and computing advantages: "was this trajectory better or worse than your other attempts?" If you sample 16 solutions and one scores 0.8 while the group average is 0.6, that solution gets advantage +0.2. The model learns "do more of this" for above-average approaches.
+      </p>
+
+      <p>
+        Until recently, testing RL ideas required millions in GPU compute, weeks building distributed training infrastructure, custom rollout systems, careful hyperparameter tuning - basically an entire ML engineering team and serious budget.
+      </p>
+
+      <p>
+        That's where <a href="https://thinkingmachines.ai/" target="_blank" rel="noopener noreferrer">Thinking Machines' Tinker</a> comes in. Tinker abstracts the entire RL stack: distributed execution, rollout collection, GRPO advantage computation, LoRA fine-tuning, checkpointing, and logging. I started with their <a href="https://github.com/thinking-machines-lab/tinker-cookbook" target="_blank" rel="noopener noreferrer">tinker-cookbook</a> on GitHub, which provides well-documented examples and shows how to extend their base classes with custom RL environments and simple YAML configs.
+      </p>
+
+      <p>
+        This meant I could skip infrastructure complexity and focus on the interesting part: <strong>designing a reward function that can teach adaptive thinking.</strong>
       </p>
     </div>
   </article>
@@ -60,28 +97,54 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 <style>
   .prose {
     color: #1a1a1a;
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
   }
   
   .prose p {
     margin-bottom: 1.5em;
     line-height: 1.8;
-    font-size: 1.125rem;
+    font-size: 1.5rem;
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
   }
   
   .prose h2 {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
     margin-top: 2.5em;
     margin-bottom: 1em;
-    font-size: 2.25rem;
+    font-size: 2rem;
     font-weight: 600;
   }
   
   .prose h3 {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
     margin-top: 2em;
     margin-bottom: 0.75em;
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 600;
+  }
+  
+  .prose h4 {
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
+    font-weight: 600;
+    font-size: 1.3rem;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+  
+  .prose h5 {
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
+    font-weight: 600;
+    font-size: 1.2rem;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+  }
+  
+  .prose h6 {
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
   }
   
   .prose ul, .prose ol {
@@ -91,8 +154,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   
   .prose li {
     margin-bottom: 0.75em;
-    font-size: 1.125rem;
+    font-size: 1.5rem;
     line-height: 1.8;
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
   }
   
   .prose a {
@@ -100,6 +164,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     text-decoration: underline;
     text-decoration-color: #999;
     text-underline-offset: 2px;
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
   }
   
   .prose a:hover {
@@ -134,6 +199,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     color: #666666;
     font-style: italic;
     font-size: 1.125rem;
+    font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
   }
   
   .prose img {
