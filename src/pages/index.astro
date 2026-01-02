@@ -199,18 +199,28 @@ const imageBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
         <li><strong>Hard:</strong> 620 tokens, 89% accuracy (49% reduction)</li>
       </ul>
 
-      <!-- E2H Tokens and Pareto Frontier Images Side by Side -->
-      <div class="mb-6 flex flex-wrap justify-center gap-6">
-        <div class="flex-1 min-w-[300px] max-w-[600px]">
-          <img src={imageBase + 'e2h_tokens_by_difficulty.png'} alt="E2H tokens by difficulty" class="w-full h-auto rounded-lg" />
-        </div>
-        <div class="flex-1 min-w-[300px] max-w-[600px]">
-          <img src={imageBase + 'pareto_frontier.png'} alt="Pareto frontier" class="w-full h-auto rounded-lg" />
-        </div>
+      <!-- E2H Tokens by Difficulty Image -->
+      <div class="mb-6 flex justify-center">
+        <img src={imageBase + 'e2h_tokens_by_difficulty.png'} alt="E2H tokens by difficulty" class="max-w-3xl w-full h-auto rounded-lg" />
       </div>
 
       <p>
-        The model spent more than twice as much compute on hard versus easy problems, learning which tolerate compression and which need reasoning budget. Low penalty showed 1.77× adaptation, high showed 2.13× (despite accuracy collapse). This suggests adaptive allocation is robust to penalty strength, though excessive penalties sacrifice reasoning quality on complex problems.
+        The model spent more than twice as much compute on hard versus easy problems, learning which tolerate compression and which need reasoning budget. Low penalty showed 1.77× adaptation, high showed 2.13×. Here's where we hit a natural Pareto frontier - penalize tokens too much, and the model just doesn't think as much as it needs to get the right answer. But we found a sweet spot!
+      </p>
+
+      <!-- Pareto Frontier Image -->
+      <div class="mb-6 flex justify-center">
+        <img src={imageBase + 'pareto_frontier.png'} alt="Pareto frontier" class="max-w-3xl w-full h-auto rounded-lg" />
+      </div>
+
+      <h2>What's Next</h2>
+      <p>
+        This work has clear limitations that point toward exciting directions. The reward function is deliberately simple - SelfBudgeter's approach where models predict their own budgets likely captures richer signal. The dataset is narrow: only math via GSM8K/MATH. Does this transfer to code generation or scientific reasoning? That's worth exploring. The high alpha failure mode reveals something fundamental - you can't compress reasoning arbitrarily without breaking correctness. But there's room to push further: dynamic per-problem budgets, curriculum learning that gradually tightens constraints, or testing on larger models to see if scale changes the tradeoff.
+      </p>
+
+      <h2>Closing Thoughts</h2>
+      <p>
+        What excites me most actually isn't the 59.6% token reduction - it's the 2.21× adaptive ratio. The model learned to reason about its own reasoning without explicit difficulty labels - that's <strong> emergent metacognition from verifiable rewards </strong>. At scale, this matters beyond cost. Millions of reasoning queries run daily; 59.6% fewer tokens means measurably less energy per query. Coming from climate tech, that environmental angle resonates. Huge thanks to Thinking Machines for making distributed RL training accessible through Tinker - this wouldn't exist without that infrastructure. Thanks to NVIDIA and ServiceNow for the podcast that sparked the idea. The code is on GitHub, and I'd love to hear what you build with it.
       </p>
     </div>
   </article>
