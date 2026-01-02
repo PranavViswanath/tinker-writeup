@@ -6,7 +6,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
   <article class="max-w-4xl mx-auto px-6 py-12">
     <!-- Title -->
     <header class="mb-8 text-center pt-8">
-      <h1 class="text-4xl font-bold mb-2" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">Adaptive Reasoning with RLVR: Learning When to Think</h1>
+      <h1 class="text-3xl font-bold mb-2" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">Adaptive Reasoning with RLVR:<br />Learning When to Think</h1>
       <div class="text-2xl text-text-secondary" style="font-family: 'Georgia', 'Times New Roman', 'Times', serif;">
         By <a href="https://pranavviswanath.notion.site/self" class="hover:text-text-primary transition-colors">Pranav Viswanath</a>
       </div>
@@ -29,15 +29,15 @@ import BaseLayout from '../layouts/BaseLayout.astro';
     <div class="prose prose-lg max-w-none mt-6">
       <h2>Introduction</h2>
       <p>
-        If someone asked you what "2 + 2" equals, you'd probably answer "4" without hesitation. But if they asked you to prove Fermat's last theorem, along with being a little annoyed, you'd probably take a bit longer.
+        If someone asked you what "2 + 2" equals, you'd probably answer "4" without hesitation. But if they asked you to prove Fermat's last theorem, along with being a little annoyed, you'd probably think a bit longer.
       </p>
 
       <p>
-        LLMs don't work this way.
+        <strong> LLMs don't work this way. </strong>
       </p>
 
       <p>
-        The newest generation of reasoning models - OpenAI's o3, Anthropic's Opus 4.5, etc - achieve breakthrough performance by "thinking out loud," generating extended chains of reasoning that outperform much larger models on complex benchmarks like AIME and GPQA.
+        The newest generation of reasoning models - OpenAI's o3, Anthropic's Opus 4.5, etc - simulate "thinking out loud" by generating extended chains of reasoning that outperform much larger models on complex benchmarks like AIME and GPQA.
       </p>
 
       <p>
@@ -50,7 +50,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </div>
 
       <p>
-        This matters at scale. In production systems handling millions of queries, uniform allocation means most inference budget gets spent on easy problems that could be solved in a fraction of the tokens. For companies deploying reasoning models, this inefficiency makes models way more expensive than necessary to use. It's also an environmental concern - wasted tokens mean wasted energy, and at the scale these models are being deployed, that adds up.
+        This matters at scale. In production systems handling millions of queries, this means most inference budget gets spent on easy problems that could be solved with a fraction of the tokens, and thus cost. It's also an environmental concern - wasted tokens mean wasted energy, and at the scale these models are being deployed, that adds up.
       </p>
 
       <p>
@@ -63,6 +63,10 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </p>
 
       <p>
+        In this read, we'll cover how I tested this idea using RLVR (Reinforcement Learning with Verifiable Rewards) on GSM8K math benchmarks with custom GRPO environments on Tinker. <strong> And the findings might surprise you </strong> (as they did me) - not only did the model learn to use fewer tokens, it actually got <strong> more accurate </strong> and developed adaptive behavior, automatically spending less compute on easy problems and more on hard ones, without ever being told which was which.
+      </p>
+
+      <p>
         <strong>Turns out, with a little ingenuity (and a ton of infra help from Tinker), we can go a long way!</strong>
       </p>
 
@@ -72,8 +76,14 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       </p>
 
       <p>
-        In RL for language models, the LLM is an agent generating tokens in response to prompts. After completing a response, we assign a reward (1.0 for correct, 0.0 for wrong, minus penalties for excess tokens). The model updates to maximize expected rewards by learning which token choices lead to success.
+        In RL for language models, the LLM is an agent generating tokens in response to prompts. After completing a response, the model gets assigned a scalar reward either from a trained reward model on human preferences, or any other number of criteria. The model updates to maximize expected rewards by learning which token choices lead to success.
       </p>
+
+      <!-- RLVR Image -->
+      <div class="mb-6 flex flex-col items-center">
+        <img src="/rlvr.jpg" alt="RLVR diagram" class="rounded-lg mb-2" style="max-width: 500px; width: auto; height: auto;" />
+        <div class="text-sm text-text-secondary italic">Source: Wolfe</div>
+      </div>
 
       <p>
         The challenge is sparse feedback - if a 50-token reasoning chain fails, which tokens were the problem? GRPO (Group Relative Policy Optimization) handles this by sampling multiple attempts at each problem and computing advantages: "was this trajectory better or worse than your other attempts?" If you sample 16 solutions and one scores 0.8 while the group average is 0.6, that solution gets advantage +0.2. The model learns "do more of this" for above-average approaches.
@@ -89,6 +99,114 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
       <p>
         This meant I could skip infrastructure complexity and focus on the interesting part: <strong>designing a reward function that can teach adaptive thinking.</strong>
+      </p>
+
+      <h2>Reward Function Design</h2>
+      <p>
+        In reinforcement learning, the reward function is where you encode what "good" looks like. For math reasoning, the obvious reward is binary: 1.0 for correct, 0.0 for wrong. But that only optimizes accuracy. To teach efficiency, we need to explicitly penalize wastefulness.
+      </p>
+
+      <p>
+        The reward function I tested is deliberately minimal:
+      </p>
+
+      <div class="my-6 text-center font-mono text-2xl" style="font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;">
+        <div>R = <span style="color: #16a34a;">correctness</span> − <span style="color: #dc2626;">α</span> · <span style="color: #9333ea;">max(0, tokens<sub>used</sub> − target budget)</span></div>
+      </div>
+
+      <p>
+        The intuition: correctness stays primary (never sacrifice accuracy for speed), but every thinking token beyond a set budget costs you. The α parameter controls how much. I set the token budget based on baseline characterization - Qwen3-8B naturally used a median of 982 tokens on GSM8K problems, so 500 was deliberately aggressive to create genuine learning pressure.
+      </p>
+
+      <h3>The alpha sweep</h3>
+      <p>
+        The tricky part is choosing α. I tested four values systematically, based on baseline thinking token stats incorporating P75-90, mean, median, etc:
+      </p>
+
+      <ul>
+        <li><strong>Baseline (α = 0)</strong>: No penalty, pure correctness</li>
+        <li><strong>Low (α = 0.0001953)</strong>: Gentle efficiency nudge</li>
+        <li><strong>Moderate (α = 0.000975)</strong>: Hypothesis for sweet spot</li>
+        <li><strong>High (α = 0.00195)</strong>: Aggressive constraint to test failure modes</li>
+      </ul>
+
+      <p>
+        The heuristic: α ≈ 1.0 / budget. For a 500-token budget, that's ~0.001 - meaning if you exceed budget by 500 tokens, the penalty roughly equals the correctness reward. This ensures the penalty matters without overwhelming the primary objective.
+      </p>
+
+      <h3>Why not something more sophisticated?</h3>
+      <p>
+        More complicated reward functions do exist! ByteDance's <a href="https://arxiv.org/html/2505.11274v1#S3" target="_blank" rel="noopener noreferrer">SelfBudgeter</a> paper takes a much more elaborate approach: the model first predicts its own token budget, then gets rewarded for accurate prediction and staying within limits. It's a two-stage process - supervised fine-tuning to teach budget prediction, then RL to optimize both. Elegant, but hard to implement solo with limited compute.
+      </p>
+
+      <p>
+        I wanted to test whether the core insight - economic pressure on thinking tokens balanced by accuracy - could work with the simplest possible implementation. Let's see how well that worked out.
+      </p>
+
+      <h2>Training + Results</h2>
+      <p>
+        I trained Qwen3-8B using a custom RLVR environment built off of the "math-rl" library in the tinker-cookbook, using Tinker's GRPO-type group sampling with LoRA (rank 32) on 2,242 <a href="https://huggingface.co/datasets/openai/gsm8k" target="_blank" rel="noopener noreferrer">GSM8K/MATH</a> math training problems. Each training step sampled 128 problems with 16 solution attempts per problem - 38,912 total rollouts across 19 steps. To evaluate adaptive budget allocation I used the <a href="https://huggingface.co/datasets/furonghuang-lab/Easy2Hard-Bench/viewer/E2H-GSM8K?views%5B%5D=e2h_gsm8k" target="_blank" rel="noopener noreferrer">Easy2Hard (E2H)</a> dataset, which stratifies the entire test set into easy/medium/hard difficulty.
+      </p>
+
+      <p>
+        I ran four experiments in parallel to find the optimal alpha: baseline (α=0), low (α=0.0001953), moderate (α=0.000975), and high (α=0.00195) penalty strengths.
+      </p>
+
+      <h3>The Breakthrough</h3>
+      <p>
+        The moderate penalty showed the clearest learning trajectory. Starting at 962 tokens with 91.1% accuracy, improvement was gradual through step 9 (913 tokens, 94.5% accuracy). Then step 10 hit: tokens dropped to 654 while accuracy jumped to 96.6%. This was likely where model discovered a fundamentally different reasoning strategy! The training continued smoothly to 397 tokens with 94.7% final accuracy.
+      </p>
+
+      <p>
+        Baseline drifted from 920→982 tokens while accuracy only reached 77.9%. High penalty compressed to 285 tokens but accuracy collapsed to 87.4%.
+      </p>
+
+      <!-- Training Curves Image -->
+      <div class="mb-6 flex justify-center">
+        <img src="/training_curves_comparison.png" alt="Training curves comparison showing moderate penalty breakthrough" class="max-w-3xl w-full h-auto rounded-lg" />
+      </div>
+
+      <h3>Test-Time Improvements</h3>
+      <p>
+        The moderate alpha penalty achieved a 59.6% token reduction (982→397) with 16.8 percentage point accuracy improvement over baseline. The full picture: baseline at 982 tokens/77.9%, low at 582 tokens/93.6%, moderate at 397 tokens/94.7%, high at 285 tokens/87.4%.
+      </p>
+
+      <p>
+        The counterintuitive finding: token constraints actually <strong>improved accuracy! </strong>. Most likely, the penalties likely act as regularization, forcing focused reasoning instead of verbose rambling.
+      </p>
+
+      <!-- E2H Behavior by Difficulty Image -->
+      <div class="mb-6 flex justify-center">
+        <img src="/e2h_accuracy_by_difficulty.png" alt="E2H behavior by difficulty" class="max-w-3xl w-full h-auto rounded-lg" />
+      </div>
+
+      <h3>Adaptive Behavior: The Key Discovery</h3>
+      <p>
+        Here's where the intelligent resource allocation comes in. The baseline run showed flat allocation - 720 tokens on easy problems, 960 on medium, 1,210 on hard, only 1.68× ratio.
+      </p>
+
+      <p>
+        The moderate penalty learned dramatic adaptation without ever seeing difficulty labels!
+      </p>
+
+      <ul>
+        <li><strong>Easy:</strong> 280 tokens, 98% accuracy (61% reduction)</li>
+        <li><strong>Medium:</strong> 410 tokens, 95% accuracy (57% reduction)</li>
+        <li><strong>Hard:</strong> 620 tokens, 89% accuracy (49% reduction)</li>
+      </ul>
+
+      <!-- E2H Tokens and Pareto Frontier Images Side by Side -->
+      <div class="mb-6 flex flex-wrap justify-center gap-6">
+        <div class="flex-1 min-w-[300px] max-w-[600px]">
+          <img src="/e2h_tokens_by_difficulty.png" alt="E2H tokens by difficulty" class="w-full h-auto rounded-lg" />
+        </div>
+        <div class="flex-1 min-w-[300px] max-w-[600px]">
+          <img src="/pareto_frontier.png" alt="Pareto frontier" class="w-full h-auto rounded-lg" />
+        </div>
+      </div>
+
+      <p>
+        The model spent more than twice as much compute on hard versus easy problems, learning which tolerate compression and which need reasoning budget. Low penalty showed 1.77× adaptation, high showed 2.13× (despite accuracy collapse). This suggests adaptive allocation is robust to penalty strength, though excessive penalties sacrifice reasoning quality on complex problems.
       </p>
     </div>
   </article>
